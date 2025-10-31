@@ -19,7 +19,6 @@ public class AccountsApiService
     {
         try
         {
-            // Limpa headers de autorização para registro (não precisa autenticação)
             _httpClient.DefaultRequestHeaders.Authorization = null;
             
             var response = await _httpClient.PostAsJsonAsync("api/contas/cadastrar", request);
@@ -50,7 +49,6 @@ public class AccountsApiService
     {
         try
         {
-            // Limpa headers de autorização para login (ainda não tem token)
             _httpClient.DefaultRequestHeaders.Authorization = null;
             
             var response = await _httpClient.PostAsJsonAsync("api/contas/entrar", request);
@@ -125,7 +123,6 @@ public class AccountsApiService
         }
         catch (Exception ex)
         {
-            // Re-throw sem adicionar mensagem extra se já for uma Exception criada por nós
             if (ex.Message.Contains("Não autenticado") || ex.Message.Contains("Sessão expirada") || ex.Message.Contains("demorou muito"))
             {
                 throw;

@@ -15,9 +15,7 @@ public class AccountNumber
     {
         if (string.IsNullOrWhiteSpace(accountNumber))
         {
-            // Gera número de conta aleatório de 10 dígitos
             var random = new Random();
-            // Usa Next para gerar número entre 0 e 999999999, depois adiciona zeros à esquerda
             var number = random.Next(0, 1000000000);
             accountNumber = number.ToString("D10");
         }

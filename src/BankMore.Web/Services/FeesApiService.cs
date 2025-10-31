@@ -31,7 +31,6 @@ public class FeesApiService
             
             if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
             {
-                // 404 é OK - significa que não há tarifas para essa conta
                 return Enumerable.Empty<FeeResponse>();
             }
             
@@ -49,7 +48,6 @@ public class FeesApiService
         }
         catch (Exception ex)
         {
-            // Re-throw com mensagem mais clara
             if (ex.Message.Contains("timeout") || ex.Message.Contains("demorou muito"))
             {
                 throw;

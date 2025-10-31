@@ -1,6 +1,5 @@
 namespace BankMore.Web.Services;
 
-// Models para comunicação com as APIs
 public class LoginRequest
 {
     public string Login { get; set; } = string.Empty;
@@ -41,7 +40,7 @@ public class TransactionRequest
     public string RequestId { get; set; } = string.Empty;
     public string AccountNumber { get; set; } = string.Empty;
     public decimal Amount { get; set; }
-    public char Type { get; set; } // 'C' para Crédito, 'D' para Débito
+    public char Type { get; set; }
 }
 
 public class TransferRequest

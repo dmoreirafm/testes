@@ -8,11 +8,9 @@ using System.Text;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Add services to the container
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 
-// CORS
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowBlazorApp", policy =>
@@ -24,7 +22,6 @@ builder.Services.AddCors(options =>
     });
 });
 
-// Swagger
 builder.Services.AddSwaggerGen(c =>
 {
     c.SwaggerDoc("v1", new OpenApiInfo
@@ -46,7 +43,6 @@ builder.Services.AddSwaggerGen(c =>
         }
     });
     
-    // Inclui XML comments dos DTOs e Controllers
     var xmlFile = $"{System.Reflection.Assembly.GetExecutingAssembly().GetName().Name}.xml";
     var xmlPath = Path.Combine(AppContext.BaseDirectory, xmlFile);
     if (File.Exists(xmlPath))
@@ -54,7 +50,6 @@ builder.Services.AddSwaggerGen(c =>
         c.IncludeXmlComments(xmlPath);
     }
 
-    // Adiciona suporte para JWT no Swagger
     c.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
     {
         Description = "JWT Authorization header usando o esquema Bearer. Exemplo: \"Authorization: Bearer {token}\"",
@@ -80,14 +75,11 @@ builder.Services.AddSwaggerGen(c =>
     });
 });
 
-// MediatR
 builder.Services.AddMediatR(cfg => cfg.RegisterServicesFromAssembly(typeof(BankMore.Contas.Application.Commands.RegisterAccount.RegisterAccountCommand).Assembly));
 
-// Infrastructure
 builder.Services.AddInfrastructure(builder.Configuration);
 builder.Services.AddKafkaConsumers(builder.Configuration);
 
-// JWT Authentication
 var secretKey = builder.Configuration["Jwt:SecretKey"] ?? "BankMore_SecretKey_Minimum_32_Characters_Long_For_HS256";
 var issuer = builder.Configuration["Jwt:Issuer"] ?? "BankMore";
 var audience = builder.Configuration["Jwt:Audience"] ?? "BankMore";
@@ -112,7 +104,6 @@ builder.Services.AddAuthorization();
 
 var app = builder.Build();
 
-// Configure the HTTP request pipeline
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
@@ -121,21 +112,13 @@ if (app.Environment.IsDevelopment())
 
 app.UseHttpsRedirection();
 
-// CORS deve vir antes de Authentication
 app.UseCors("AllowBlazorApp");
-
-// Routing
 app.UseRouting();
-
-// JWT Middleware (deve vir antes de UseAuthentication)
 app.UseJwtMiddleware();
-
 app.UseAuthentication();
 app.UseAuthorization();
-
 app.MapControllers();
 
-// Inicia KafkaBus
 try
 {
     var kafkaBus = app.Services.CreateKafkaBus();

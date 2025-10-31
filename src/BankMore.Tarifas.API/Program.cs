@@ -5,11 +5,9 @@ using Microsoft.OpenApi.Models;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Add services to the container
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 
-// CORS
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowBlazorApp", policy =>
@@ -21,7 +19,6 @@ builder.Services.AddCors(options =>
     });
 });
 
-// Swagger
 builder.Services.AddSwaggerGen(c =>
 {
     c.SwaggerDoc("v1", new OpenApiInfo
@@ -43,7 +40,6 @@ builder.Services.AddSwaggerGen(c =>
         }
     });
     
-    // Inclui XML comments dos DTOs e Controllers
     var xmlFile = $"{System.Reflection.Assembly.GetExecutingAssembly().GetName().Name}.xml";
     var xmlPath = Path.Combine(AppContext.BaseDirectory, xmlFile);
     if (File.Exists(xmlPath))
@@ -52,13 +48,11 @@ builder.Services.AddSwaggerGen(c =>
     }
 });
 
-// Infrastructure
 builder.Services.AddInfrastructure(builder.Configuration);
 builder.Services.AddKafkaConsumers(builder.Configuration);
 
 var app = builder.Build();
 
-// Configure the HTTP request pipeline
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
@@ -66,13 +60,9 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
-
-// CORS deve vir antes de Authentication
 app.UseCors("AllowBlazorApp");
-
 app.MapControllers();
 
-// Inicia KafkaBus
 try
 {
     var kafkaBus = app.Services.CreateKafkaBus();

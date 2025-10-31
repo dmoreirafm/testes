@@ -1,5 +1,4 @@
 using BankMore.Contas.Application.Services;
-//using KafkaFlow.Microsoft.DependencyInjection;
 using BankMore.Contas.Domain.Repositories;
 using BankMore.Contas.Infrastructure.Database;
 using BankMore.Contas.Infrastructure.Messaging;
@@ -18,11 +17,9 @@ public static class DependencyInjection
 {
     public static IServiceCollection AddInfrastructure(this IServiceCollection services, IConfiguration configuration)
     {
-        // Database connection string
         var connectionString = configuration.GetConnectionString("DefaultConnection") 
             ?? "Data Source=accounts.db;Version=3;";
         
-        // Initialize database apenas uma vez (singleton)
         var initConnection = new SQLiteConnection(connectionString);
         initConnection.Open();
         var initializer = new DatabaseInitializer(initConnection);
@@ -30,7 +27,6 @@ public static class DependencyInjection
         initConnection.Close();
         initConnection.Dispose();
         
-        // Factory para criar conexões scoped (uma por request)
         services.AddScoped<IDbConnection>(sp =>
         {
             var connString = configuration.GetConnectionString("DefaultConnection") 
@@ -40,11 +36,8 @@ public static class DependencyInjection
             return connection;
         });
 
-        // Repositories
         services.AddScoped<IAccountRepository, AccountRepository>();
         services.AddScoped<Domain.Repositories.ITransactionRepository, TransactionRepository>();
-
-        // Services
         services.AddScoped<IPasswordHasher, PasswordHasher>();
         services.AddScoped<ITokenService, TokenService>();
 
@@ -58,7 +51,6 @@ public static class DependencyInjection
 
         services.AddKafka(
             kafka => kafka
-                //.UseConsoleLog()
                 .AddCluster(
                     cluster => cluster
                         .WithBrokers(new[] { bootstrapServers })

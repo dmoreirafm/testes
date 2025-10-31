@@ -16,7 +16,6 @@ public class Cpf
         if (string.IsNullOrWhiteSpace(cpf))
             throw new DomainException("CPF não pode ser vazio.", "INVALID_DOCUMENT");
 
-        // Remove caracteres não numéricos
         var digits = new string(cpf.Where(char.IsDigit).ToArray());
 
         if (digits.Length < 11)
@@ -25,7 +24,6 @@ public class Cpf
         if (digits.Length > 11)
             throw new DomainException("CPF deve conter exatamente 11 dígitos numéricos.", "INVALID_DOCUMENT");
 
-        // Validação completa do algoritmo de CPF
         if (!IsValidCpf(digits))
             throw new DomainException("CPF inválido.", "INVALID_DOCUMENT");
 
@@ -37,11 +35,9 @@ public class Cpf
         if (cpf.Length != 11)
             return false;
 
-        // Verifica se todos os dígitos são iguais
         if (cpf.All(c => c == cpf[0]))
             return false;
 
-        // Valida primeiro dígito verificador
         int sum = 0;
         for (int i = 0; i < 9; i++)
             sum += int.Parse(cpf[i].ToString()) * (10 - i);
@@ -52,7 +48,6 @@ public class Cpf
         if (digit1 != int.Parse(cpf[9].ToString()))
             return false;
 
-        // Valida segundo dígito verificador
         sum = 0;
         for (int i = 0; i < 10; i++)
             sum += int.Parse(cpf[i].ToString()) * (11 - i);
