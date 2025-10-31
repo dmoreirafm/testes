@@ -1,0 +1,132 @@
+
+services:
+  accounts-api:
+    build:
+      context: .
+      dockerfile: src/BankMore.Contas.API/Dockerfile
+    container_name: bankmore-accounts-api
+    ports:
+      - "5001:8080"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ASPNETCORE_URLS=http://0.0.0.0:8080
+      - ConnectionStrings__DefaultConnection=Data Source=/data/accounts.db;Version=3;
+      - Kafka__BootstrapServers=kafka:29092
+    volumes:
+      - accounts-data:/data
+    depends_on:
+      kafka:
+        condition: service_healthy
+    networks:
+      - bankmore-network
+    restart: unless-stopped
+
+  transfers-api:
+    build:
+      context: .
+      dockerfile: src/BankMore.Transferencias.API/Dockerfile
+    container_name: bankmore-transfers-api
+    ports:
+      - "5002:8080"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ASPNETCORE_URLS=http://0.0.0.0:8080
+      - ConnectionStrings__DefaultConnection=Data Source=/data/transfers.db;Version=3;
+      - AccountsApi__BaseUrl=http://accounts-api:8080
+      - Kafka__BootstrapServers=kafka:29092
+    volumes:
+      - transfers-data:/data
+    depends_on:
+      - accounts-api
+      - kafka
+    networks:
+      - bankmore-network
+    restart: unless-stopped
+
+  fees-api:
+    build:
+      context: .
+      dockerfile: src/BankMore.Tarifas.API/Dockerfile
+    container_name: bankmore-fees-api
+    ports:
+      - "5003:8080"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ASPNETCORE_URLS=http://0.0.0.0:8080
+      - ConnectionStrings__DefaultConnection=Data Source=/data/fees.db;Version=3;
+      - Kafka__BootstrapServers=kafka:29092
+    volumes:
+      - fees-data:/data
+    depends_on:
+      - accounts-api
+      - kafka
+    networks:
+      - bankmore-network
+    restart: unless-stopped
+
+  web:
+    build:
+      context: .
+      dockerfile: src/BankMore.Web/Dockerfile
+    container_name: bankmore-web
+    ports:
+      - "5000:8080"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ASPNETCORE_URLS=http://0.0.0.0:8080
+      - ApiSettings__AccountsApi=http://accounts-api:8080
+      - ApiSettings__TransfersApi=http://transfers-api:8080
+      - ApiSettings__FeesApi=http://fees-api:8080
+    depends_on:
+      - accounts-api
+      - transfers-api
+      - fees-api
+    networks:
+      - bankmore-network
+    restart: unless-stopped
+
+  # Kafka - Para Fees API
+  zookeeper:
+    image: confluentinc/cp-zookeeper:latest
+    container_name: bankmore-zookeeper
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    networks:
+      - bankmore-network
+    restart: unless-stopped
+
+  kafka:
+    image: confluentinc/cp-kafka:7.5.0
+    container_name: bankmore-kafka
+    depends_on:
+      - zookeeper
+    ports:
+      - "9092:9092"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092,PLAINTEXT_INTERNAL://kafka:29092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_INTERNAL:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT_INTERNAL
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+    healthcheck:
+      test: ["CMD-SHELL", "kafka-broker-api-versions --bootstrap-server localhost:29092 || exit 1"]
+      interval: 10s
+      timeout: 10s
+      retries: 12
+      start_period: 40s
+    networks:
+      - bankmore-network
+    restart: unless-stopped
+
+volumes:
+  accounts-data:
+  transfers-data:
+  fees-data:
+
+networks:
+  bankmore-network:
+    driver: bridge
+

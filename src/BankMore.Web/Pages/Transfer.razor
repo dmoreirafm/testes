@@ -1,0 +1,313 @@
+@page "/transfer"
+@using BankMore.Web.Services
+@inject TransfersApiService TransfersApi
+@inject AccountsApiService AccountsApi
+@inject AuthService AuthService
+@inject NavigationManager Navigation
+
+<PageTitle>Transferência - BankMore</PageTitle>
+
+<div class="container mt-4">
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <div class="card shadow">
+                <div class="card-header bg-primary text-white">
+                    <h3 class="mb-0"><i class="oi oi-transfer"></i> Nova Transferência</h3>
+                </div>
+                <div class="card-body">
+                    @if (!string.IsNullOrEmpty(errorMessage))
+                    {
+                        <div class="alert alert-danger">@errorMessage</div>
+                    }
+
+                    @if (!string.IsNullOrEmpty(successMessage))
+                    {
+                        <div class="alert alert-success">@successMessage</div>
+                    }
+
+                    <EditForm Model="@transferRequest" OnValidSubmit="@HandleTransfer">
+                        <DataAnnotationsValidator />
+                        <div class="mb-3">
+                            <label class="form-label">Conta Destino</label>
+                            <InputText @bind-Value="transferRequest.DestinationAccountNumber" 
+                                      class="form-control" 
+                                      placeholder="Digite o número da conta destino (10 dígitos)" />
+                            @if (!string.IsNullOrEmpty(destinationAccountError))
+                            {
+                                <div class="text-danger small mt-1">@destinationAccountError</div>
+                            }
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Valor (R$)</label>
+                            <InputText @bind-Value="amountText" 
+                                      @oninput="OnAmountInput"
+                                      @onblur="OnAmountBlur"
+                                      class="form-control" 
+                                      placeholder="Digite o valor" />
+                            @if (!string.IsNullOrEmpty(amountError))
+                            {
+                                <div class="text-danger small mt-1">@amountError</div>
+                            }
+                        </div>
+                        <div class="d-grid gap-2">
+                            <button type="submit" class="btn btn-primary btn-lg" disabled="@isLoading">
+                                @if (isLoading)
+                                {
+                                    <span class="spinner-border spinner-border-sm me-2"></span>
+                                }
+                                Transferir
+                            </button>
+                            <a href="/dashboard" class="btn btn-secondary">Cancelar</a>
+                        </div>
+                    </EditForm>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    private TransferRequest transferRequest = new();
+    private bool isLoading = false;
+    private string errorMessage = string.Empty;
+    private string successMessage = string.Empty;
+    private string amountText = string.Empty;
+    private string amountError = string.Empty;
+    private string destinationAccountError = string.Empty;
+
+    private void OnAmountInput(ChangeEventArgs e)
+    {
+        amountError = string.Empty;
+        var input = e.Value?.ToString() ?? string.Empty;
+        
+        // Remove espaços
+        input = input.Trim();
+        
+        // Permite digitação livre - apenas atualiza o texto sem formatar
+        // Remove caracteres inválidos, mantendo apenas números, vírgula e ponto
+        var cleanInput = System.Text.RegularExpressions.Regex.Replace(input, @"[^\d,\.]", "");
+        amountText = cleanInput;
+        
+        // Tenta calcular o valor em tempo real (sem formatar o campo ainda)
+        TryParseAmount(cleanInput);
+        
+        StateHasChanged();
+    }
+
+    private void OnAmountBlur(FocusEventArgs e)
+    {
+        // Quando o campo perder o foco, aplica a formatação
+        if (string.IsNullOrWhiteSpace(amountText))
+        {
+            amountText = string.Empty;
+            transferRequest.Amount = 0;
+            StateHasChanged();
+            return;
+        }
+
+        var parsed = TryParseAmount(amountText);
+        if (parsed.HasValue && parsed.Value > 0)
+        {
+            // Formata o valor monetário
+            amountText = parsed.Value.ToString("N2", System.Globalization.CultureInfo.GetCultureInfo("pt-BR"));
+        }
+        
+        StateHasChanged();
+    }
+
+    private decimal? TryParseAmount(string input)
+    {
+        if (string.IsNullOrWhiteSpace(input))
+        {
+            transferRequest.Amount = 0;
+            return null;
+        }
+
+        // Remove todos os caracteres não numéricos (exceto vírgula e ponto)
+        var onlyNumbers = System.Text.RegularExpressions.Regex.Replace(input, @"[^\d]", "");
+        
+        if (string.IsNullOrEmpty(onlyNumbers))
+        {
+            transferRequest.Amount = 0;
+            return null;
+        }
+
+        decimal value;
+        
+        // Se o usuário digitou vírgula ou ponto, trata como decimal direto
+        if (input.Contains(",") || input.Contains("."))
+        {
+            // Remove pontos de milhar e substitui vírgula por ponto
+            var cleanInput = input.Replace(".", "").Replace(",", ".");
+            
+            if (decimal.TryParse(cleanInput, System.Globalization.NumberStyles.AllowDecimalPoint, System.Globalization.CultureInfo.InvariantCulture, out value))
+            {
+                // Valida se não começa com zero desnecessário (exceto "0," ou "0.")
+                if (input.StartsWith("0") && input.Length > 2 && !input.StartsWith("0,") && !input.StartsWith("0."))
+                {
+                    amountError = "Valor não pode começar com zero.";
+                    transferRequest.Amount = 0;
+                    return null;
+                }
+            }
+            else
+            {
+                amountError = "Valor inválido.";
+                transferRequest.Amount = 0;
+                return null;
+            }
+        }
+        else
+        {
+            // Se não há vírgula/ponto, trata como centavos (divide por 100)
+            // Exemplo: "1" → 0,01 | "10" → 0,10 | "100" → 1,00 | "1000" → 10,00
+            if (!long.TryParse(onlyNumbers, out long cents))
+            {
+                amountError = "Valor inválido.";
+                transferRequest.Amount = 0;
+                return null;
+            }
+            
+            value = cents / 100m;
+        }
+        
+        if (value <= 0)
+        {
+            amountError = "Valor deve ser maior que zero.";
+            transferRequest.Amount = 0;
+            return null;
+        }
+        
+        amountError = string.Empty;
+        transferRequest.Amount = value;
+        return value;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            try
+            {
+                var isAuthenticated = await AuthService.IsAuthenticatedAsync();
+                if (!isAuthenticated)
+                {
+                    Navigation.NavigateTo("/login");
+                }
+            }
+            catch
+            {
+                Navigation.NavigateTo("/login");
+            }
+        }
+    }
+
+    private async Task HandleTransfer()
+    {
+        try
+        {
+            isLoading = true;
+            errorMessage = string.Empty;
+            successMessage = string.Empty;
+            destinationAccountError = string.Empty;
+            amountError = string.Empty;
+            StateHasChanged(); // Atualiza UI para mostrar loading
+
+            // Valida conta destino
+            if (string.IsNullOrWhiteSpace(transferRequest.DestinationAccountNumber))
+            {
+                destinationAccountError = "Conta de destino é obrigatória.";
+                isLoading = false;
+                StateHasChanged();
+                return;
+            }
+
+            // Valida valor antes de enviar
+            if (transferRequest.Amount <= 0)
+            {
+                amountError = "Por favor, informe um valor válido maior que zero.";
+                isLoading = false;
+                StateHasChanged();
+                return;
+            }
+
+            // Validação de saldo insuficiente
+            try
+            {
+                var accountNumber = await AuthService.GetAccountNumberAsync();
+                if (string.IsNullOrEmpty(accountNumber))
+                {
+                    errorMessage = "Não foi possível identificar sua conta. Faça login novamente.";
+                    isLoading = false;
+                    StateHasChanged();
+                    return;
+                }
+
+                var balanceResponse = await AccountsApi.GetBalanceAsync(accountNumber);
+                if (balanceResponse == null)
+                {
+                    errorMessage = "Não foi possível consultar o saldo da conta.";
+                    isLoading = false;
+                    StateHasChanged();
+                    return;
+                }
+
+                // Tarifa fixa de R$ 2,00 será aplicada após a transferência
+                const decimal transferFee = 2.00m;
+                var totalNeeded = transferRequest.Amount + transferFee;
+
+                if (balanceResponse.Balance < totalNeeded)
+                {
+                    var saldoFaltante = totalNeeded - balanceResponse.Balance;
+                    errorMessage = $"Saldo insuficiente. Você possui R$ {balanceResponse.Balance:N2} disponível. " +
+                                  $"É necessário R$ {totalNeeded:N2} (R$ {transferRequest.Amount:N2} da transferência + R$ {transferFee:N2} de tarifa). " +
+                                  $"Faltam R$ {saldoFaltante:N2}.";
+                    isLoading = false;
+                    StateHasChanged();
+                    return;
+                }
+            }
+            catch (Exception ex)
+            {
+                // Se houver erro ao consultar saldo, tenta a transferência mesmo assim (o backend também valida)
+                // Mas loga o erro para debug
+                System.Diagnostics.Debug.WriteLine($"Erro ao validar saldo: {ex.Message}");
+            }
+            
+            // Timeout de 60 segundos para a operação completa
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(60));
+            
+            await TransfersApi.CreateTransferAsync(transferRequest);
+            
+            successMessage = $"Transferência de R$ {transferRequest.Amount:N2} realizada com sucesso! " +
+                            $"(Tarifa de R$ 2,00 será debitada automaticamente)";
+            StateHasChanged(); // Atualiza para mostrar mensagem de sucesso
+            
+            transferRequest = new TransferRequest();
+            amountText = string.Empty;
+            amountError = string.Empty;
+            
+            await Task.Delay(2000);
+            Navigation.NavigateTo("/dashboard");
+        }
+        catch (TaskCanceledException)
+        {
+            errorMessage = "A requisição demorou muito para responder (timeout de 60s). Verifique se a Transfers API está rodando.";
+        }
+        catch (Exception ex)
+        {
+            errorMessage = ex.Message;
+            
+            if (ex.Message.Contains("timeout") || ex.Message.Contains("demorou muito") || ex.Message.Contains("Timeout"))
+            {
+                errorMessage += " A Transfers API pode não estar respondendo. Verifique os logs: docker-compose logs transfers-api";
+            }
+        }
+        finally
+        {
+            isLoading = false;
+            StateHasChanged(); // Força atualização da UI
+        }
+    }
+}
+

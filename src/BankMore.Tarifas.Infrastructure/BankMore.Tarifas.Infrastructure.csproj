@@ -1,0 +1,28 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\BankMore.Tarifas.Domain\BankMore.Tarifas.Domain.csproj" />
+    <ProjectReference Include="..\BankMore.Tarifas.Application\BankMore.Tarifas.Application.csproj" />
+    <PackageReference Include="Dapper" Version="2.1.35" />
+    <PackageReference Include="System.Data.SQLite.Core" Version="1.0.118" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.Abstractions" Version="8.0.0" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="8.0.0" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="8.0.0" />
+    <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" Version="8.0.0" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="8.0.0" />
+    <!-- Todas estas versões devem ser 1.5.8 -->
+    <PackageReference Include="KafkaFlow" Version="1.5.8" />
+    <PackageReference Include="KafkaFlow.Microsoft.DependencyInjection" Version="1.5.8" />
+    <PackageReference Include="KafkaFlow.Serializer.Json" Version="1.5.8" />
+
+    
+    <Compile Remove="Class1.cs" />
+  </ItemGroup>
+
+</Project>

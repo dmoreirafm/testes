@@ -1,0 +1,170 @@
+@page "/login"
+@using BankMore.Web.Services
+@inject AccountsApiService AccountsApi
+@inject AuthService AuthService
+@inject NavigationManager Navigation
+
+<PageTitle>Login - BankMore</PageTitle>
+
+<div class="container mt-5">
+    <div class="row justify-content-center">
+        <div class="col-md-6">
+            <div class="card shadow">
+                <div class="card-header bg-primary text-white">
+                    <h3 class="mb-0">BankMore - Acesso</h3>
+                </div>
+                <div class="card-body">
+                    <ul class="nav nav-tabs mb-3" role="tablist">
+                        <li class="nav-item">
+                            <button class="nav-link @(isLogin ? "active" : "")" @onclick="() => isLogin = true">Login</button>
+                        </li>
+                        <li class="nav-item">
+                            <button class="nav-link @(!isLogin ? "active" : "")" @onclick="() => isLogin = false">Cadastro</button>
+                        </li>
+                    </ul>
+
+                    @if (!string.IsNullOrEmpty(errorMessage))
+                    {
+                        <div class="alert alert-danger">@errorMessage</div>
+                    }
+
+                    @if (!string.IsNullOrEmpty(successMessage))
+                    {
+                        <div class="alert alert-success">@successMessage</div>
+                    }
+
+                    @if (isLogin)
+                    {
+                        <EditForm Model="@loginRequest" OnValidSubmit="@HandleLogin">
+                            <DataAnnotationsValidator />
+                            <div class="mb-3">
+                                <label class="form-label">CPF ou Número da Conta</label>
+                                <InputText @bind-Value="loginRequest.Login" class="form-control" placeholder="12345678901 ou 1234567890" />
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">Senha</label>
+                                <InputText type="password" @bind-Value="loginRequest.Password" class="form-control" />
+                            </div>
+                            <button type="submit" class="btn btn-primary w-100" disabled="@isLoading">
+                                @if (isLoading)
+                                {
+                                    <span class="spinner-border spinner-border-sm me-2"></span>
+                                }
+                                Entrar
+                            </button>
+                        </EditForm>
+                    }
+                    else
+                    {
+                        <EditForm Model="@registerRequest" OnValidSubmit="@HandleRegister">
+                            <DataAnnotationsValidator />
+                            <div class="mb-3">
+                                <label class="form-label">Nome Completo</label>
+                                <InputText @bind-Value="registerRequest.Name" class="form-control" />
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">CPF</label>
+                                <InputText @bind-Value="registerRequest.Cpf" class="form-control" placeholder="12345678901" />
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">Senha</label>
+                                <InputText type="password" @bind-Value="registerRequest.Password" class="form-control" />
+                            </div>
+                            <button type="submit" class="btn btn-success w-100" disabled="@isLoading">
+                                @if (isLoading)
+                                {
+                                    <span class="spinner-border spinner-border-sm me-2"></span>
+                                }
+                                Cadastrar
+                            </button>
+                        </EditForm>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    private bool isLogin = true;
+    private bool isLoading = false;
+    private string errorMessage = string.Empty;
+    private string successMessage = string.Empty;
+    private LoginRequest loginRequest = new();
+    private RegisterRequest registerRequest = new();
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            try
+            {
+                var isAuthenticated = await AuthService.IsAuthenticatedAsync();
+                if (isAuthenticated)
+                {
+                    Navigation.NavigateTo("/dashboard");
+                }
+            }
+            catch
+            {
+                // Ignora erro e permite acesso à página de login
+            }
+        }
+    }
+
+    private async Task HandleLogin()
+    {
+        try
+        {
+            isLoading = true;
+            errorMessage = string.Empty;
+            successMessage = string.Empty;
+
+            var response = await AccountsApi.LoginAsync(loginRequest);
+            
+            if (response != null)
+            {
+                // Pequeno delay para garantir que o token foi salvo
+                await Task.Delay(200);
+                Navigation.NavigateTo("/dashboard", forceLoad: true);
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = ex.Message;
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task HandleRegister()
+    {
+        try
+        {
+            isLoading = true;
+            errorMessage = string.Empty;
+            successMessage = string.Empty;
+
+            var response = await AccountsApi.RegisterAsync(registerRequest);
+            
+            if (response != null)
+            {
+                successMessage = $"Conta criada com sucesso! Número da conta: {response.AccountNumber}";
+                await Task.Delay(2000);
+                isLogin = true;
+                loginRequest.Login = response.AccountNumber;
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = ex.Message;
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+}
+

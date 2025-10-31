@@ -1,0 +1,229 @@
+@page "/deposit"
+@using BankMore.Web.Services
+@inject AccountsApiService AccountsApi
+@inject AuthService AuthService
+@inject NavigationManager Navigation
+
+<PageTitle>Depósito - BankMore</PageTitle>
+
+<div class="container mt-4">
+    <div class="row justify-content-center">
+        <div class="col-md-6">
+            <div class="card shadow">
+                <div class="card-header bg-success text-white">
+                    <h3 class="mb-0"><i class="oi oi-plus"></i> Depositar</h3>
+                </div>
+                <div class="card-body">
+                    @if (!string.IsNullOrEmpty(errorMessage))
+                    {
+                        <div class="alert alert-danger">@errorMessage</div>
+                    }
+
+                    @if (!string.IsNullOrEmpty(successMessage))
+                    {
+                        <div class="alert alert-success">@successMessage</div>
+                    }
+
+                    <EditForm Model="@transactionRequest" OnValidSubmit="@HandleDeposit">
+                        <DataAnnotationsValidator />
+                        <div class="mb-3">
+                            <label class="form-label">Valor (R$)</label>
+                            <InputText @bind-Value="amountText" 
+                                      @oninput="OnAmountInput"
+                                      @onblur="OnAmountBlur"
+                                      class="form-control" 
+                                      placeholder="Digite o valor" />
+                            @if (!string.IsNullOrEmpty(amountError))
+                            {
+                                <div class="text-danger small mt-1">@amountError</div>
+                            }
+                        </div>
+                        <div class="d-grid gap-2">
+                            <button type="submit" class="btn btn-success btn-lg" disabled="@isLoading">
+                                @if (isLoading)
+                                {
+                                    <span class="spinner-border spinner-border-sm me-2"></span>
+                                }
+                                Depositar
+                            </button>
+                            <a href="/dashboard" class="btn btn-secondary">Cancelar</a>
+                        </div>
+                    </EditForm>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    private TransactionRequest transactionRequest = new() { Type = 'C' };
+    private bool isLoading = false;
+    private string errorMessage = string.Empty;
+    private string successMessage = string.Empty;
+    private string amountText = string.Empty;
+    private string amountError = string.Empty;
+
+    private void OnAmountInput(ChangeEventArgs e)
+    {
+        amountError = string.Empty;
+        var input = e.Value?.ToString() ?? string.Empty;
+        
+        // Remove espaços
+        input = input.Trim();
+        
+        // Permite digitação livre - apenas atualiza o texto sem formatar
+        // Remove caracteres inválidos, mantendo apenas números, vírgula e ponto
+        var cleanInput = System.Text.RegularExpressions.Regex.Replace(input, @"[^\d,\.]", "");
+        amountText = cleanInput;
+        
+        // Tenta calcular o valor em tempo real (sem formatar o campo ainda)
+        TryParseAmount(cleanInput);
+        
+        StateHasChanged();
+    }
+
+    private void OnAmountBlur(FocusEventArgs e)
+    {
+        // Quando o campo perder o foco, aplica a formatação
+        if (string.IsNullOrWhiteSpace(amountText))
+        {
+            amountText = string.Empty;
+            transactionRequest.Amount = 0;
+            StateHasChanged();
+            return;
+        }
+
+        var parsed = TryParseAmount(amountText);
+        if (parsed.HasValue && parsed.Value > 0)
+        {
+            // Formata o valor monetário
+            amountText = parsed.Value.ToString("N2", System.Globalization.CultureInfo.GetCultureInfo("pt-BR"));
+        }
+        
+        StateHasChanged();
+    }
+
+    private decimal? TryParseAmount(string input)
+    {
+        if (string.IsNullOrWhiteSpace(input))
+        {
+            transactionRequest.Amount = 0;
+            return null;
+        }
+
+        // Remove todos os caracteres não numéricos (exceto vírgula e ponto)
+        var onlyNumbers = System.Text.RegularExpressions.Regex.Replace(input, @"[^\d]", "");
+        
+        if (string.IsNullOrEmpty(onlyNumbers))
+        {
+            transactionRequest.Amount = 0;
+            return null;
+        }
+
+        decimal value;
+        
+        // Se o usuário digitou vírgula ou ponto, trata como decimal direto
+        if (input.Contains(",") || input.Contains("."))
+        {
+            // Remove pontos de milhar e substitui vírgula por ponto
+            var cleanInput = input.Replace(".", "").Replace(",", ".");
+            
+            if (decimal.TryParse(cleanInput, System.Globalization.NumberStyles.AllowDecimalPoint, System.Globalization.CultureInfo.InvariantCulture, out value))
+            {
+                // Valida se não começa com zero desnecessário (exceto "0," ou "0.")
+                if (input.StartsWith("0") && input.Length > 2 && !input.StartsWith("0,") && !input.StartsWith("0."))
+                {
+                    amountError = "Valor não pode começar com zero.";
+                    transactionRequest.Amount = 0;
+                    return null;
+                }
+            }
+            else
+            {
+                amountError = "Valor inválido.";
+                transactionRequest.Amount = 0;
+                return null;
+            }
+        }
+        else
+        {
+            // Se não há vírgula/ponto, trata como centavos (divide por 100)
+            // Exemplo: "1" → 0,01 | "10" → 0,10 | "100" → 1,00 | "1000" → 10,00
+            if (!long.TryParse(onlyNumbers, out long cents))
+            {
+                amountError = "Valor inválido.";
+                transactionRequest.Amount = 0;
+                return null;
+            }
+            
+            value = cents / 100m;
+        }
+        
+        if (value <= 0)
+        {
+            amountError = "Valor deve ser maior que zero.";
+            transactionRequest.Amount = 0;
+            return null;
+        }
+        
+        amountError = string.Empty;
+        transactionRequest.Amount = value;
+        return value;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            try
+            {
+                var isAuthenticated = await AuthService.IsAuthenticatedAsync();
+                if (!isAuthenticated)
+                {
+                    Navigation.NavigateTo("/login");
+                }
+            }
+            catch
+            {
+                Navigation.NavigateTo("/login");
+            }
+        }
+    }
+
+    private async Task HandleDeposit()
+    {
+        try
+        {
+            isLoading = true;
+            errorMessage = string.Empty;
+            successMessage = string.Empty;
+
+            // Valida valor antes de enviar
+            if (transactionRequest.Amount <= 0)
+            {
+                errorMessage = "Por favor, informe um valor válido maior que zero.";
+                return;
+            }
+            
+            transactionRequest.Type = 'C'; // Crédito
+            await AccountsApi.MakeTransactionAsync(transactionRequest);
+            
+            successMessage = $"Depósito de R$ {transactionRequest.Amount:N2} realizado com sucesso!";
+            transactionRequest = new TransactionRequest { Type = 'C' };
+            amountText = string.Empty;
+            amountError = string.Empty;
+            
+            await Task.Delay(2000);
+            Navigation.NavigateTo("/dashboard");
+        }
+        catch (Exception ex)
+        {
+            errorMessage = ex.Message;
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+}
+

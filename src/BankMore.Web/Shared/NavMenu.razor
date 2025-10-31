@@ -1,0 +1,124 @@
+﻿@using BankMore.Web.Services
+@inject AuthService AuthService
+@inject NavigationManager Navigation
+@implements IDisposable
+
+<div class="top-row ps-3 navbar navbar-dark bg-primary">
+    <div class="container-fluid">
+        <a class="navbar-brand" href="/dashboard">
+            <strong>🏦 BankMore</strong>
+        </a>
+        <button title="Navigation menu" class="navbar-toggler" @onclick="ToggleNavMenu">
+            <span class="navbar-toggler-icon"></span>
+        </button>
+    </div>
+</div>
+
+<div class="@NavMenuCssClass nav-scrollable" @onclick="ToggleNavMenu">
+    <nav class="flex-column">
+        @if (isReady && isAuthenticated)
+        {
+            <div class="nav-item px-3">
+                <NavLink class="nav-link" href="/dashboard">
+                    <span class="oi oi-home" aria-hidden="true"></span> Dashboard
+                </NavLink>
+            </div>
+            <div class="nav-item px-3">
+                <NavLink class="nav-link" href="/transfer">
+                    <span class="oi oi-transfer" aria-hidden="true"></span> Transferir
+                </NavLink>
+            </div>
+            <div class="nav-item px-3">
+                <NavLink class="nav-link" href="/deposit">
+                    <span class="oi oi-plus" aria-hidden="true"></span> Depositar
+                </NavLink>
+            </div>
+            <div class="nav-item px-3">
+                <NavLink class="nav-link" href="/withdraw">
+                    <span class="oi oi-minus" aria-hidden="true"></span> Sacar
+                </NavLink>
+            </div>
+            <div class="nav-item px-3">
+                <NavLink class="nav-link" href="/fees">
+                    <span class="oi oi-list-rich" aria-hidden="true"></span> Tarifas
+                </NavLink>
+            </div>
+            <div class="nav-item px-3">
+                <button class="nav-link btn-link text-start border-0 w-100 text-danger" @onclick="HandleLogout">
+                    <span class="oi oi-account-logout" aria-hidden="true"></span> Sair
+                </button>
+            </div>
+        }
+        else if (isReady)
+        {
+            <div class="nav-item px-3">
+                <NavLink class="nav-link" href="/login">
+                    <span class="oi oi-account-login" aria-hidden="true"></span> Login
+                </NavLink>
+            </div>
+        }
+    </nav>
+</div>
+
+@code {
+    private bool collapseNavMenu = true;
+    private bool isAuthenticated = false;
+    private bool isReady = false;
+
+    private string? NavMenuCssClass => collapseNavMenu ? "collapse" : null;
+
+    private void ToggleNavMenu()
+    {
+        collapseNavMenu = !collapseNavMenu;
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        await CheckAuthenticationStatus();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            await CheckAuthenticationStatus();
+        }
+    }
+
+    private async Task CheckAuthenticationStatus()
+    {
+        try
+        {
+            isAuthenticated = await AuthService.IsAuthenticatedAsync();
+            isReady = true;
+            StateHasChanged();
+        }
+        catch
+        {
+            isAuthenticated = false;
+            isReady = true;
+            StateHasChanged();
+        }
+    }
+
+    private async Task HandleLogout()
+    {
+        await AuthService.LogoutAsync();
+        isAuthenticated = false;
+        isReady = true;
+        StateHasChanged();
+        await Task.Delay(100); // Pequeno delay para garantir que o estado foi atualizado
+        Navigation.NavigateTo("/login", forceLoad: true);
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        // Atualiza o estado de autenticação quando os parâmetros mudam (navegação)
+        await CheckAuthenticationStatus();
+    }
+
+    public void Dispose()
+    {
+        // Limpeza se necessário
+    }
+}

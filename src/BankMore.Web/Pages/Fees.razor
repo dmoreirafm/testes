@@ -1,0 +1,186 @@
+@page "/fees"
+@using BankMore.Web.Services
+@using System.Linq
+@inject FeesApiService FeesApi
+@inject AuthService AuthService
+@inject NavigationManager Navigation
+
+<PageTitle>Tarifas - BankMore</PageTitle>
+
+<div class="container mt-4">
+    <div class="row">
+        <div class="col-md-12">
+            <div class="card shadow">
+                <div class="card-header bg-info text-white">
+                    <h3 class="mb-0"><i class="oi oi-list-rich"></i> Histórico de Tarifas</h3>
+                </div>
+                <div class="card-body">
+                    @if (!string.IsNullOrEmpty(errorMessage))
+                    {
+                        <div class="alert alert-danger" role="alert">
+                            <h4 class="alert-heading">Erro!</h4>
+                            <p>@errorMessage</p>
+                            <hr>
+                            <button class="btn btn-primary" @onclick="RetryLoad">Tentar Novamente</button>
+                            <button class="btn btn-secondary" @onclick="GoToDashboard">Voltar ao Dashboard</button>
+                        </div>
+                    }
+                    else if (isLoading)
+                    {
+                        <div class="text-center">
+                            <div class="spinner-border text-primary" role="status">
+                                <span class="visually-hidden">Carregando...</span>
+                            </div>
+                            <p class="mt-3">Carregando tarifas...</p>
+                        </div>
+                    }
+                    else if (fees == null || !fees.Any())
+                    {
+                        <div class="alert alert-info">
+                            Nenhuma tarifa encontrada. As tarifas aparecerão aqui após realizar transferências.
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="table-responsive">
+                            <table class="table table-striped">
+                                <thead>
+                                    <tr>
+                                        <th>ID</th>
+                                        <th>Transferência</th>
+                                        <th>Conta</th>
+                                        <th>Valor Transferência</th>
+                                        <th>Tarifa</th>
+                                        <th>Data</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var fee in fees)
+                                    {
+                                        <tr>
+                                            <td>@fee.Id</td>
+                                            <td>@fee.TransferId</td>
+                                            <td>@fee.AccountNumber</td>
+                                            <td>R$ @fee.TransferAmount.ToString("N2")</td>
+                                            <td class="text-danger"><strong>R$ @fee.FeeAmount.ToString("N2")</strong></td>
+                                            <td>@fee.AppliedAt.ToString("dd/MM/yyyy HH:mm")</td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                        
+                        <div class="mt-3">
+                            <strong>Total de Tarifas: @fees.Count()</strong> | 
+                            <strong class="text-danger">Total Pago em Tarifas: R$ @fees.Sum(f => f.FeeAmount).ToString("N2")</strong>
+                        </div>
+                    }
+                    
+                    <div class="mt-3">
+                        <a href="/dashboard" class="btn btn-secondary">Voltar</a>
+                        <button class="btn btn-primary" @onclick="RefreshFees">Atualizar</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    private IEnumerable<FeeResponse>? fees;
+    private bool isLoading = true;
+    private string? errorMessage;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            isLoading = true;
+            errorMessage = null;
+            
+            var isAuthenticated = await AuthService.IsAuthenticatedAsync();
+            if (!isAuthenticated)
+            {
+                Navigation.NavigateTo("/login");
+                return;
+            }
+
+            await LoadFees();
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Erro ao carregar tarifas: {ex.Message}";
+            isLoading = false;
+            
+            if (ex.Message.Contains("Não autenticado") || ex.Message.Contains("401") || ex.Message.Contains("autenticado"))
+            {
+                await AuthService.LogoutAsync();
+                await Task.Delay(500);
+                Navigation.NavigateTo("/login");
+            }
+        }
+    }
+
+    private async Task LoadFees()
+    {
+        try
+        {
+            isLoading = true;
+            errorMessage = null;
+            fees = null; // Limpa dados anteriores
+            
+            var accountNumber = await AuthService.GetAccountNumberAsync();
+            
+            if (string.IsNullOrEmpty(accountNumber))
+            {
+                throw new Exception("Número da conta não encontrado. Faça login novamente.");
+            }
+            
+            // Timeout de 30 segundos para a operação completa
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+            
+            fees = await FeesApi.GetFeesByAccountAsync(accountNumber);
+            
+            if (fees == null)
+            {
+                fees = Enumerable.Empty<FeeResponse>();
+            }
+        }
+        catch (TaskCanceledException)
+        {
+            errorMessage = "A requisição demorou muito para responder (timeout de 30s). Verifique se a Fees API está rodando.";
+            fees = Enumerable.Empty<FeeResponse>();
+        }
+        catch (Exception ex)
+        {
+            errorMessage = ex.Message;
+            fees = Enumerable.Empty<FeeResponse>();
+            
+            if (ex.Message.Contains("timeout") || ex.Message.Contains("demorou muito") || ex.Message.Contains("Timeout"))
+            {
+                errorMessage += " A Fees API pode não estar respondendo. Verifique os logs: docker-compose logs fees-api";
+            }
+        }
+        finally
+        {
+            isLoading = false;
+            StateHasChanged(); // Força atualização da UI
+        }
+    }
+
+    private async Task RefreshFees()
+    {
+        await LoadFees();
+    }
+
+    private async Task RetryLoad()
+    {
+        await LoadFees();
+    }
+
+    private void GoToDashboard()
+    {
+        Navigation.NavigateTo("/dashboard");
+    }
+}
+

@@ -1,0 +1,31 @@
+﻿@page "/"
+@using BankMore.Web.Services
+@inject AuthService AuthService
+@inject NavigationManager Navigation
+
+<PageTitle>BankMore</PageTitle>
+
+@code {
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            try
+            {
+                var isAuthenticated = await AuthService.IsAuthenticatedAsync();
+                if (isAuthenticated)
+                {
+                    Navigation.NavigateTo("/dashboard");
+                }
+                else
+                {
+                    Navigation.NavigateTo("/login");
+                }
+            }
+            catch
+            {
+                Navigation.NavigateTo("/login");
+            }
+        }
+    }
+}

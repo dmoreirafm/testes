@@ -1,0 +1,60 @@
+﻿@inherits LayoutComponentBase
+@using BankMore.Web.Services
+@inject AuthService AuthService
+
+<PageTitle>BankMore.Web</PageTitle>
+
+<div class="page">
+    @if (isAuthenticated)
+    {
+        <div class="sidebar">
+            <NavMenu />
+        </div>
+    }
+
+    <main>
+        <article class="content px-4">
+            @Body
+        </article>
+    </main>
+</div>
+
+@code {
+    private bool isAuthenticated = false;
+    private bool isReady = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await CheckAuthenticationStatus();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            await CheckAuthenticationStatus();
+        }
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        // Atualiza estado de autenticação ao navegar entre páginas
+        await CheckAuthenticationStatus();
+    }
+
+    private async Task CheckAuthenticationStatus()
+    {
+        try
+        {
+            isAuthenticated = await AuthService.IsAuthenticatedAsync();
+            isReady = true;
+            StateHasChanged();
+        }
+        catch
+        {
+            isAuthenticated = false;
+            isReady = true;
+            StateHasChanged();
+        }
+    }
+}
